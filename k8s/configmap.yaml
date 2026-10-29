@@ -1,0 +1,12 @@
+# Порты и таймауты приходят отсюда через envFrom
+# нечувствительные настройки приложения, подключаются в деплое
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fitness-booking-config
+  labels:
+    app: fitness-booking
+data:
+  HTTP_PORT: "8080"
+  GRPC_PORT: "9090"
+  SHUTDOWN_TIMEOUT_SECONDS: "5"

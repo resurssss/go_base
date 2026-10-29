@@ -1,0 +1,40 @@
+# Лаба 3. docker-compose автоматически накладывает этот файл поверх docker-compose.yml,
+# поэтому исходный файл из лаб 1-2 не изменён: `docker compose up --build`
+services:
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"   # веб-интерфейс: http://localhost:15672 (guest/guest)
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  # producer: только добавляем адрес брокера и зависимость
+  fitness-booking:
+    environment:
+      RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672/"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  consumer:
+    build:
+      context: ./consumer
+    image: fitness-bonus-consumer:local
+    restart: on-failure
+    stop_grace_period: 20s   # даём время на graceful shutdown до SIGKILL
+    environment:
+      RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672/"
+      WORKERS: "4"
+      MAX_ATTEMPTS: "3"
+      BACKOFF_BASE_MS: "200"
+      SHUTDOWN_TIMEOUT_SECONDS: "10"
+      FAIL_CLIENT: "poison"        # клиент, обработка которого всегда падает (демо dead-letter)
+      PROCESS_DELAY_MS: "0"        # поставьте 500 для демо graceful shutdown
+    depends_on:
+      rabbitmq:
+        condition: service_healthy

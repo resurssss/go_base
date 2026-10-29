@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fitness-booking
+  labels:
+    app: fitness-booking
+spec:
+  # Две реплики: пока один под пересоздаётся,
+  # второй продолжает обслуживать трафик через Service
+  replicas: 2
+  selector:
+    matchLabels:
+      app: fitness-booking
+  strategy:
+    # RollingUpdate: в моменте всегда есть хотя бы один Ready-под, готовый принимать трафик.
+    # стратегия обновления при смене образа/конфига
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1  # 1 дополнительный под сверх replicas разрешено создать временно во время обновления
+  template:
+    metadata:
+      labels:
+        app: fitness-booking
+    spec:
+      containers:
+        - name: fitness-booking
+          image: fitness-booking-service:local
+          # imagePullPolicy: Never — образ уже загружен в локальный кластер командой `kind load docker-image`
+          imagePullPolicy: Never  # берётся только то, что уже физически есть на ноде
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: grpc
+              containerPort: 9090
+          envFrom:
+            - configMapRef:
+                name: fitness-booking-config
+          # liveness — HTTP /health: liveness должен быть максимально независимой от бизнес-логики проверкой "процесс жив вообще"
+          # уже есть простой HTTP-эндпоинт /health для этого
+          # liveness нет - kubelet убивает и перезапускает контейнер
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 3  # подождать 3 секунды после старта контейнера, прежде чем начать проверять пробой
+            periodSeconds: 5  # раз в 5 секунд повторять пробу
+            timeoutSeconds: 2  # 2 секунды ждать ответа на один запрос пробы, прежде чем считать эту попытку неудачной
+            failureThreshold: 3   # нужно 3 неудачные попытки подряд, прежде чем считать пробу провалившейся
+          # readiness — gRPC-проба Kubernetes
+          # readiness нет - под не убивается, но исключается из Service
+          readinessProbe:
+            grpc:
+              port: 9090
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+        # requests нужны планировщику, чтобы определить, на каком узле достаточно ресурсов для размещения пода.
+        # limits ограничивают потребление пода, чтобы он не занял ресурсы, предназначенные для других подов на том же узле.
+          resources:  # сколько ресурсов гарантированно нужно поду
+            requests:
+              cpu: "50m"
+              memory: "32Mi"
+            limits:  # максимум, который поду разрешено использовать
+              cpu: "200m"
+              memory: "64Mi"

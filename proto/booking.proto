@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package booking;
+
+option go_package = "lab1/pb;pb";
+
+import "google/protobuf/timestamp.proto";
+
+// Описание сервиса на языке Protocol Buffers для gRPC
+service BookingService {
+  rpc CreateBooking(CreateBookingRequest) returns (CreateBookingResponse);
+  rpc ListSlots(ListSlotsRequest) returns (ListSlotsResponse);
+}
+
+message CreateBookingRequest {
+  string slot_id = 1;
+  string client = 2;
+  google.protobuf.Timestamp from = 3;
+  google.protobuf.Timestamp to = 4;
+}
+
+message CreateBookingResponse {
+  string status = 1;
+}
+
+message ListSlotsRequest {}
+
+message SlotView {
+  string id = 1;
+  bool available = 2;
+}
+
+message ListSlotsResponse {
+  repeated SlotView slots = 1;
+}
